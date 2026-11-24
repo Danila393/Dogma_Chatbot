@@ -156,7 +156,9 @@ class DogmaApiClient:
             )
             await self._sleep(delay)
 
-        raise SourceError(f"{path}: giving up after {max_attempts} attempts") from last_error
+        raise SourceError(
+            f"{path}: giving up after {max_attempts} attempts (last error: {last_error})"
+        ) from last_error
 
     def _backoff(self, attempt: int) -> float:
         base: float = self._settings.parser_backoff_base * (2 ** (attempt - 1))

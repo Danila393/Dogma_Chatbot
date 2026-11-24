@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 
 class AppError(Exception):
@@ -17,23 +17,29 @@ class AppError(Exception):
         self.details = details
 
 
-class ComplexNotResolvedError(AppError):
-    """The requested residential complex is unknown or ambiguous."""
+class FilterValueNotResolvedError(AppError):
+    """A residential complex or city named by the user is unknown or ambiguous."""
 
     status_code = 422
-    code = "complex_not_resolved"
+    code = "filter_value_not_resolved"
 
-    def __init__(self, query: str, candidates: list[str]) -> None:
+    _LABELS: ClassVar[dict[str, str]] = {"complex_name": "ЖК", "city": "Город"}
+
+    def __init__(self, field: str, query: str, candidates: list[str]) -> None:
+        self.field = field
         self.query = query
         self.candidates = candidates
+        label = self._LABELS.get(field, field)
         if candidates:
             message = (
-                f"ЖК «{query}» не найден однозначно. Уточните, какой из вариантов вы имели "
-                f"в виду: {', '.join(candidates)}."
+                f"{label} «{query}» не найден однозначно. Уточните, что вы имели в виду: "
+                f"{', '.join(candidates)}."
             )
         else:
-            message = f"ЖК «{query}» не найден в базе."
-        super().__init__(message, details={"query": query, "candidates": candidates})
+            message = f"{label} «{query}» не найден в базе."
+        super().__init__(
+            message, details={"field": field, "query": query, "candidates": candidates}
+        )
 
 
 class LLMNotConfiguredError(AppError):
