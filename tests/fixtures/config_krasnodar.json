@@ -1,0 +1,22 @@
+{
+  "areas": [19.2, 222.4],
+  "cities": [
+    {
+      "city_id": 3,
+      "city_name": "Краснодар",
+      "projects": [
+        {"project_id": 3, "project_name": "МКР Самолёт"},
+        {"project_id": 4, "project_name": "DОГМА ПАРК"},
+        {"project_id": 5, "project_name": "Рекорд 2"},
+        {"project_id": 6, "project_name": "Парк Победы"},
+        {"project_id": 11, "project_name": "РИДЗ"},
+        {"project_id": 12, "project_name": "САМОЛЁТ 7"},
+        {"project_id": 13, "project_name": "ГРЕЙД"},
+        {"project_id": 16, "project_name": "Парк Победы 3"}
+      ]
+    }
+  ],
+  "costs": [4260825, 44892320],
+  "rooms": [0, 1, 2, 3],
+  "count_objects": 12152
+}

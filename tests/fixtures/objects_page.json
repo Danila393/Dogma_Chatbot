@@ -1,0 +1,33 @@
+{
+  "status": "200",
+  "error": null,
+  "requestId": "",
+  "data": {
+    "count": 12152,
+    "objects": [
+      {
+        "id": 55951, "layout_url": "https://bitrix.1dogma.net/upload//layouts/bild_20/liter_170/door_1/c96/5g38vbh4pbpob8a6m3a09opv1fp6huwy/16.png",
+        "layout_url_second": "", "type": 1, "status": 2, "room": 0, "flat_number": 16,
+        "floor": 3, "floor_max": 3, "area": 32.3, "bti_area": 32.3, "square_price": 296200,
+        "count": 1, "cost": 9567260, "cost_sale": 7175445, "tags": [], "discount_id": 0,
+        "discount_tag": "", "construction_deadline": "2025-12-31", "project_name": "Рекорд 2",
+        "letter_name": "3", "letter_id": 170, "project_id": 5,
+        "address": "Краснодар, ул. Новороссийская, 90/2", "special_price": "0",
+        "project_link": "/projects/record2"
+      },
+      {
+        "id": 6060, "layout_url": "", "type": 1, "status": 2, "room": 0, "flat_number": 243,
+        "floor": 5, "floor_max": 5, "area": 26.2, "square_price": 204400, "cost": 5365500,
+        "cost_sale": 0, "construction_deadline": "0000-01-01", "project_name": "МКР Самолёт",
+        "letter_name": "21", "project_id": 3, "address": "Краснодар, ул. Западный обход"
+      },
+      {
+        "id": 41134, "layout_url": "https://bitrix.1dogma.net/upload/itiso.shahmatki/b8e/p03rhnlhnlqbz8zzw8wgel1v22n1fwr2/27_lit_3_pod_3_9_et_78_1.png",
+        "type": 1, "status": 2, "room": 3, "flat_number": 418, "floor": 8, "floor_max": 8,
+        "area": 78.1, "bti_area": 78.1, "square_price": 156800, "cost": 12246080, "cost_sale": 0,
+        "construction_deadline": "2023-09-28", "project_name": "МКР Самолёт", "letter_name": "27",
+        "letter_id": 125, "project_id": 3, "address": "Краснодар, ул. Западный обход"
+      }
+    ]
+  }
+}
