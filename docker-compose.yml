@@ -1,0 +1,46 @@
+services:
+  api:
+    build: .
+    image: dogma-apartment-agent:latest
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////app/data/apartments.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - apartments-data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # lets LLM_BASE_URL point to a local Ollama/vLLM
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  # Optional thin client: docker compose --profile bot up
+  bot:
+    image: dogma-apartment-agent:latest
+    profiles: ["bot"]
+    command: ["python", "-m", "app.bot"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BOT_API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    stop_grace_period: 10s
+    restart: unless-stopped
+
+volumes:
+  apartments-data:
