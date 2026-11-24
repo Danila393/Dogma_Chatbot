@@ -67,6 +67,8 @@ class ApartmentQuery:
     complex_name_normalized: str | None = None
     rooms: int | None = None
     city: str | None = None
+    min_price_per_sqm: int | None = None
+    max_price_per_sqm: int | None = None
     min_floor: int | None = None
     max_floor: int | None = None
     sort_by: SortBy = SortBy.PRICE_ASC
@@ -209,6 +211,10 @@ class ApartmentRepository:
             conditions.append(Apartment.rooms == query.rooms)
         if query.city is not None:
             conditions.append(Apartment.city == query.city)
+        if query.min_price_per_sqm is not None:
+            conditions.append(Apartment.price_per_square_meter >= query.min_price_per_sqm)
+        if query.max_price_per_sqm is not None:
+            conditions.append(Apartment.price_per_square_meter <= query.max_price_per_sqm)
         if query.min_floor is not None:
             conditions.append(Apartment.floor >= query.min_floor)
         if query.max_floor is not None:

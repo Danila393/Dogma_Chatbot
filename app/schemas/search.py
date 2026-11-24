@@ -12,6 +12,7 @@ from app.schemas.apartment import DataFreshness, RankedApartment
 
 MAX_PRICE_RUB = 10_000_000_000
 MAX_AREA_M2 = Decimal(1000)
+MAX_PRICE_PER_SQM_RUB = 10_000_000
 MAX_LIMIT = 10
 
 
@@ -70,6 +71,12 @@ class ApartmentSearchFilters(BaseModel):
         default=None, ge=0, le=10, description="Количество комнат, 0 — студия"
     )
     city: str | None = Field(default=None, min_length=1, max_length=100, description="Город")
+    min_price_per_sqm: int | None = Field(
+        default=None, gt=0, le=MAX_PRICE_PER_SQM_RUB, description="Минимальная цена за м², ₽"
+    )
+    max_price_per_sqm: int | None = Field(
+        default=None, gt=0, le=MAX_PRICE_PER_SQM_RUB, description="Максимальная цена за м², ₽"
+    )
     min_floor: int | None = Field(default=None, ge=1, le=200, description="Минимальный этаж")
     max_floor: int | None = Field(default=None, ge=1, le=200, description="Максимальный этаж")
     sort_by: SortBy = Field(default=SortBy.PRICE_ASC, description="Порядок сортировки")
@@ -92,6 +99,7 @@ class ApartmentSearchFilters(BaseModel):
         pairs = (
             ("min_price", "max_price", "цена"),
             ("min_area", "max_area", "площадь"),
+            ("min_price_per_sqm", "max_price_per_sqm", "цена за м²"),
             ("min_floor", "max_floor", "этаж"),
         )
         for low_name, high_name, label in pairs:
@@ -113,6 +121,8 @@ class ApartmentSearchFilters(BaseModel):
                 self.complex_name,
                 self.rooms,
                 self.city,
+                self.min_price_per_sqm,
+                self.max_price_per_sqm,
                 self.min_floor,
                 self.max_floor,
             )

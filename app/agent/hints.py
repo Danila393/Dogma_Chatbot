@@ -73,6 +73,22 @@ _ROOM_PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
 )
 
 MIN_BARE_RUBLES = 100_000
+MIN_BARE_RUBLES_PER_SQM = 1_000
+
+# "... 200 тыс за метр", "250000 ₽/м²"
+_PER_SQM_AFTER = re.compile(
+    r"\s*(?:₽|руб\.?|рубл\w*|р\.)?\s*(?:за|/)\s*(?:1\s*|один\s*|одного\s*)?"
+    r"(?:кв\.?\s*м\.?|квадратн\w*\s+метр\w*|м2|м²|м\b|метр\w*|квадрат\w*)"
+)
+_BARE_SQM_BEFORE = re.compile(
+    r"(?P<prev>\S*)\s*(?:кв\.?\s*м\.?|м2|м²|метр|квадрат)(?:\s+(?:стоит|обойдет\w*))?\s*$"
+)
+# "квадратный метр не дороже ...", "цена метра до ...", "стоимость за м² от ..."
+_PER_SQM_BEFORE = re.compile(
+    r"(?:квадратн\w*\s+метр\w*|(?:цен\w*|стоимост\w*)\s+(?:за\s+)?(?:1\s+|одного\s+)?"
+    r"(?:кв\.?\s*м\.?|квадратн\w*\s+метр\w*|метр\w*|квадрат\w*|м2|м²))"
+    r"(?:\s+(?:стоит|обойдет\w*|был\w*|должн\w*\s+быть))?\s*$"
+)
 
 
 @dataclass(slots=True)
@@ -82,6 +98,8 @@ class QueryHints:
     max_price: int | None = None
     min_area: Decimal | None = None
     max_area: Decimal | None = None
+    min_price_per_sqm: int | None = None
+    max_price_per_sqm: int | None = None
     contradiction: str | None = None
     _conflicts: set[str] = field(default_factory=set)
 
@@ -92,6 +110,8 @@ class QueryHints:
             "max_price": self.max_price,
             "min_area": self.min_area,
             "max_area": self.max_area,
+            "min_price_per_sqm": self.min_price_per_sqm,
+            "max_price_per_sqm": self.max_price_per_sqm,
         }
         return {k: v for k, v in values.items() if v is not None and k not in self._conflicts}
 
@@ -131,6 +151,30 @@ def _money(value: Decimal, unit: str | None) -> int | None:
     return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
+def _is_per_sqm(text: str, start: int, end: int) -> bool:
+    """The money amount is a price of one square metre, not of the whole apartment."""
+    before = text[max(0, start - 40) : start]
+    if _PER_SQM_AFTER.match(text, end) or _PER_SQM_BEFORE.search(before):
+        return True
+    # "..., метр не дороже 250 тыс" — a bare "метр" counts only when it is not an area
+    # ("от 30 метров до 7 млн" has a number right before "метров").
+    bare = _BARE_SQM_BEFORE.search(before)
+    if bare is None:
+        return False
+    previous = bare.group("prev")
+    return not any(ch.isdigit() for ch in previous) and previous not in _WORD_NUMBERS
+
+
+def _money_per_sqm(value: Decimal, unit: str | None) -> int | None:
+    if unit and re.fullmatch(_MONEY_MILLION, unit):
+        value *= 1_000_000
+    elif unit and re.fullmatch(_MONEY_THOUSAND, unit):
+        value *= 1_000
+    elif value < MIN_BARE_RUBLES_PER_SQM:
+        return None
+    return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
 def _area(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
@@ -162,7 +206,15 @@ def extract_hints(text: str) -> QueryHints:
         kind = _classify(max(low, high), unit_for_kind)
         if low_unit and high_unit and _kind(low_unit) != _kind(high_unit):
             continue  # "от 30 м² до 7 млн" — two different constraints, handled below
-        if kind == "price":
+        per_sqm = _is_per_sqm(normalized, match.start(), match.end())
+        if per_sqm and kind in ("price", None):
+            low_sqm = _money_per_sqm(low, low_unit or high_unit)
+            high_sqm = _money_per_sqm(high, high_unit or low_unit)
+            if low_sqm is None or high_sqm is None:
+                continue
+            hints._set("min_price_per_sqm", low_sqm)
+            hints._set("max_price_per_sqm", high_sqm)
+        elif kind == "price":
             low_rub = _money(low, low_unit or high_unit)
             high_rub = _money(high, high_unit or low_unit)
             if low_rub is None or high_rub is None:
@@ -186,7 +238,11 @@ def extract_hints(text: str) -> QueryHints:
         kind = _classify(value, unit, keyword)
         if kind is None and re.search(r"площад|метраж", preceding):
             kind = "area"
-        if kind == "price":
+        if kind in ("price", None) and _is_per_sqm(normalized, match.start(), match.end()):
+            per_sqm_rub = _money_per_sqm(value, unit)
+            if per_sqm_rub is not None:
+                hints._set("max_price_per_sqm" if is_max else "min_price_per_sqm", per_sqm_rub)
+        elif kind == "price":
             rubles = _money(value, unit)
             if rubles is not None:
                 hints._set("max_price" if is_max else "min_price", rubles)
@@ -196,6 +252,9 @@ def extract_hints(text: str) -> QueryHints:
     low_price, high_price = hints.min_price, hints.max_price
     if low_price is not None and high_price is not None and low_price > high_price:
         hints.contradiction = _inverted("цена", format_rub(low_price), format_rub(high_price))
+    low_sqm, high_sqm = hints.min_price_per_sqm, hints.max_price_per_sqm
+    if low_sqm is not None and high_sqm is not None and low_sqm > high_sqm:
+        hints.contradiction = _inverted("цена за м²", format_rub(low_sqm), format_rub(high_sqm))
     low_area, high_area = hints.min_area, hints.max_area
     if low_area is not None and high_area is not None and low_area > high_area:
         hints.contradiction = _inverted("площадь", format_area(low_area), format_area(high_area))

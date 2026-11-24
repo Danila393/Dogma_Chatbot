@@ -25,20 +25,31 @@ class FilterValueNotResolvedError(AppError):
 
     _LABELS: ClassVar[dict[str, str]] = {"complex_name": "ЖК", "city": "Город"}
 
-    def __init__(self, field: str, query: str, candidates: list[str]) -> None:
+    def __init__(
+        self, field: str, query: str, candidates: list[str], *, ambiguous: bool = True
+    ) -> None:
         self.field = field
         self.query = query
         self.candidates = candidates
+        self.ambiguous = ambiguous
         label = self._LABELS.get(field, field)
-        if candidates:
+        if ambiguous and candidates:
             message = (
                 f"{label} «{query}» не найден однозначно. Уточните, что вы имели в виду: "
                 f"{', '.join(candidates)}."
             )
+        elif candidates:
+            message = f"{label} «{query}» в базе нет. Доступные варианты: {', '.join(candidates)}."
         else:
-            message = f"{label} «{query}» не найден в базе."
+            message = f"{label} «{query}» в базе нет."
         super().__init__(
-            message, details={"field": field, "query": query, "candidates": candidates}
+            message,
+            details={
+                "field": field,
+                "query": query,
+                "reason": "ambiguous" if ambiguous else "not_found",
+                "candidates": candidates,
+            },
         )
 
 

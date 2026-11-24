@@ -42,6 +42,11 @@ def _constraint_reasons(apartment: ApartmentOut, filters: ApartmentSearchFilters
     area = _area_reason(apartment.area, filters.min_area, filters.max_area)
     if area:
         reasons.append(area)
+    per_sqm = _per_sqm_reason(
+        apartment.price_per_square_meter, filters.min_price_per_sqm, filters.max_price_per_sqm
+    )
+    if per_sqm:
+        reasons.append(per_sqm)
     if filters.min_floor is not None or filters.max_floor is not None:
         reasons.append(f"{apartment.floor} этаж в заданном диапазоне")
     return reasons
@@ -61,6 +66,20 @@ def _price_reason(price: int, low: int | None, high: int | None) -> str | None:
         if diff == 0:
             return f"стоит {shown} — ровно по нижней границе цены"
         return f"стоит {shown} — на {format_rub(diff)} больше минимальной цены"
+    return None
+
+
+def _per_sqm_reason(value: int, low: int | None, high: int | None) -> str | None:
+    shown = format_rub(value)
+    if low is not None and high is not None:
+        return f"цена за м² {shown} в диапазоне {format_rub(low)} – {format_rub(high)}"
+    if high is not None:
+        diff = high - value
+        if diff == 0:
+            return f"цена за м² {shown} — ровно по заданному пределу"
+        return f"цена за м² {shown} — на {format_rub(diff)} ниже заданного предела"
+    if low is not None:
+        return f"цена за м² {shown} — не ниже {format_rub(low)}"
     return None
 
 

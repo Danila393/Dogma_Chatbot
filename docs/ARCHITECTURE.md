@@ -270,7 +270,7 @@ LLM участвует только в одном шаге — превраще�
 | LLM не настроен | `503 llm_not_configured` |
 | LLM недоступен / таймаут / rate limit | ретраи, затем `503 llm_unavailable` / `503 llm_rate_limited` |
 | Невалидный ответ модели | 1 повтор с текстом ошибки, затем `502 llm_invalid_response` |
-| Неоднозначный/неизвестный ЖК | `200` со `status=clarification_needed` (чат) / `422 complex_not_resolved` (поиск) |
+| Неоднозначный / несуществующий ЖК | `200` со `status=clarification_needed` (чат) / `422 filter_value_not_resolved` (поиск); `details.reason` = `ambiguous` или `not_found` |
 | Ошибка валидации запроса | `422 validation_error` с перечнем полей |
 | Непредвиденное исключение | `500 internal_error` без деталей, детали — в лог |
 

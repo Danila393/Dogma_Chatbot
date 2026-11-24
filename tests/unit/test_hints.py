@@ -36,6 +36,24 @@ from app.agent.hints import extract_hints
         ("от 30 м² до 7 млн", {"min_area": Decimal("30.00"), "max_price": 7_000_000}),
         ("от 5 до 7,5 млн", {"min_price": 5_000_000, "max_price": 7_500_000}),
         ("ЖК Самолёт 7 до 9 млн", {"max_price": 9_000_000}),
+        # price of one square metre is not the apartment budget
+        (
+            "Студия, где квадратный метр не дороже 200 тысяч",
+            {"rooms": 0, "max_price_per_sqm": 200_000},
+        ),
+        ("до 700 тыс за метр", {"max_price_per_sqm": 700_000}),
+        ("цена метра до 180 тыс", {"max_price_per_sqm": 180_000}),
+        ("до 250000 руб за кв.м", {"max_price_per_sqm": 250_000}),
+        (
+            "от 150 до 200 тыс за м²",
+            {"min_price_per_sqm": 150_000, "max_price_per_sqm": 200_000},
+        ),
+        (
+            "двушка до 9 млн, метр не дороже 250 тыс",
+            {"rooms": 2, "max_price": 9_000_000, "max_price_per_sqm": 250_000},
+        ),
+        ("от 30 метров до 7 млн", {"min_area": Decimal("30.00"), "max_price": 7_000_000}),
+        ("студия до 7 млн за квартиру", {"rooms": 0, "max_price": 7_000_000}),
         ("рядом с метро от 7 млн", {"min_price": 7_000_000}),
     ],
 )
@@ -71,3 +89,8 @@ def test_inverted_range_is_a_contradiction() -> None:
 def test_conflicting_values_are_not_trusted() -> None:
     hints = extract_hints("студия или двушка до 7 млн")
     assert hints.as_overrides() == {"max_price": 7_000_000}
+
+
+def test_inverted_price_per_sqm_range_is_a_contradiction() -> None:
+    hints = extract_hints("от 200 до 150 тыс за метр")
+    assert hints.contradiction is not None and "цена за м²" in hints.contradiction

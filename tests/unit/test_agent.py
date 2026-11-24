@@ -177,6 +177,21 @@ async def test_unknown_tool_is_rejected(search: SearchService) -> None:
     assert response.status is ChatStatus.OFF_TOPIC
 
 
+async def test_price_per_sqm_is_not_treated_as_budget(search: SearchService) -> None:
+    # the model mixes up a price per square metre with the apartment budget
+    provider = ScriptedProvider(search_call({"rooms": 0, "max_price": 200_000}))
+    response = await ApartmentAgent(provider, search).handle(
+        "Студия, где квадратный метр не дороже 200 тысяч"
+    )
+    assert response.status is ChatStatus.OK
+    assert response.filters is not None
+    assert response.filters.max_price is None
+    assert response.filters.max_price_per_sqm == 200_000
+    assert response.items
+    assert all(i.rooms == 0 and i.price_per_square_meter <= 200_000 for i in response.items)
+    assert "цена за м²" in response.items[0].explanation
+
+
 async def test_explicit_inverted_range_is_answered_without_llm(search: SearchService) -> None:
     provider = ScriptedProvider()
     response = await ApartmentAgent(provider, search).handle("Трёшка от 10 до 5 млн")

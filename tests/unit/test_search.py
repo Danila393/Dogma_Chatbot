@@ -74,6 +74,15 @@ async def test_city_filter(service: SearchService) -> None:
     assert await _ids(service, city="омск") == ["99"]
 
 
+async def test_price_per_sqm_filter(service: SearchService) -> None:
+    result = await service.search(ApartmentSearchFilters(max_price_per_sqm=200_000, limit=10))
+    assert result.items
+    assert all(i.price_per_square_meter <= 200_000 for i in result.items)
+    assert "на " in result.items[0].explanation and "цена за м²" in result.items[0].explanation
+    none = await service.search(ApartmentSearchFilters(max_price_per_sqm=1_000))
+    assert none.total == 0 and "цену за м²" in none.message
+
+
 async def test_floor_filter(service: SearchService) -> None:
     assert await _ids(service, min_floor=9, max_floor=10) == ["4", "10"]
 
@@ -137,8 +146,11 @@ async def test_ambiguous_complex_requires_clarification(service: SearchService) 
 
 async def test_unknown_complex_lists_known_ones(service: SearchService) -> None:
     with pytest.raises(FilterValueNotResolvedError) as error:
-        await service.search(ApartmentSearchFilters(complex_name="Изумрудный город"))
+        await service.search(ApartmentSearchFilters(complex_name="Луна"))
     assert "Рекорд 2" in error.value.candidates
+    assert error.value.ambiguous is False
+    assert error.value.message.startswith("ЖК «Луна» в базе нет. Доступные варианты:")
+    assert "однозначно" not in error.value.message
 
 
 async def test_partial_name_resolves_with_note(service: SearchService) -> None:
@@ -190,6 +202,8 @@ def test_complex_resolution(query: str, expected: str) -> None:
         {"min_price": 8_000_000, "max_price": 7_000_000},
         {"min_area": 50, "max_area": 30},
         {"min_floor": 10, "max_floor": 2},
+        {"min_price_per_sqm": 300_000, "max_price_per_sqm": 200_000},
+        {"max_price_per_sqm": 0},
         {"unknown": 1},
     ],
 )

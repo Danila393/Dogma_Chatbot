@@ -80,6 +80,8 @@ class SearchService:
                 complex_name_normalized=complex_key,
                 rooms=filters.rooms,
                 city=city,
+                min_price_per_sqm=filters.min_price_per_sqm,
+                max_price_per_sqm=filters.max_price_per_sqm,
                 min_floor=filters.min_floor,
                 max_floor=filters.max_floor,
                 sort_by=filters.sort_by,
@@ -174,6 +176,10 @@ def _relaxation_hint(filters: BaseModel) -> str:
         hints.append("изменить количество комнат")
     if "complex_name" in data:
         hints.append("рассмотреть другой ЖК")
+    if "max_price_per_sqm" in data:
+        hints.append("увеличить допустимую цену за м²")
+    if "min_price_per_sqm" in data:
+        hints.append("снизить минимальную цену за м²")
     if "min_floor" in data or "max_floor" in data:
         hints.append("расширить диапазон этажей")
     if not hints:

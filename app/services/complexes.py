@@ -35,7 +35,7 @@ def resolve_name(
         by_key.setdefault(normalize(name), name)
     key = normalize(query)
     if not key:
-        raise FilterValueNotResolvedError(field, query, sorted(by_key.values()))
+        raise FilterValueNotResolvedError(field, query, sorted(by_key.values()), ambiguous=False)
     if key in by_key:
         return Resolution(query=query, value=by_key[key], key=key, exact=True)
 
@@ -50,8 +50,11 @@ def resolve_name(
     if len(candidates) == 1:
         match = candidates.pop()
         return Resolution(query=query, value=by_key[match], key=match, exact=False)
-    shown = sorted(by_key[c] for c in candidates) if candidates else sorted(by_key.values())
-    raise FilterValueNotResolvedError(field, query, shown)
+    if candidates:
+        shown = sorted(by_key[c] for c in candidates)
+        raise FilterValueNotResolvedError(field, query, shown, ambiguous=True)
+    # Nothing similar: say so plainly and list what exists.
+    raise FilterValueNotResolvedError(field, query, sorted(by_key.values()), ambiguous=False)
 
 
 def _token_prefix_match(short: str, long: str) -> bool:

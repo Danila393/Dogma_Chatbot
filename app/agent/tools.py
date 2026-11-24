@@ -13,6 +13,7 @@ from app.schemas.search import MAX_LIMIT, ApartmentSearchFilters, SortBy
 SEARCH_TOOL = "search_apartments"
 REPLY_TOOL = "reply_without_search"
 MIN_PLAUSIBLE_PRICE = 100_000
+MIN_PLAUSIBLE_PRICE_PER_SQM = 1_000
 MAX_REPLY_LENGTH = 300
 
 
@@ -40,6 +41,15 @@ class SearchToolArguments(BaseModel):
         description="Количество комнат: студия → 0, однушка → 1, двушка → 2, трёшка → 3",
     )
     city: str | None = Field(default=None, description="Город, если пользователь его назвал")
+    min_price_per_sqm: int | None = Field(
+        default=None,
+        description="Нижняя граница цены одного квадратного метра в рублях (не бюджет квартиры)",
+    )
+    max_price_per_sqm: int | None = Field(
+        default=None,
+        description="Верхняя граница цены одного квадратного метра в рублях: «метр не дороже "
+        "200 тысяч», «до 200 тыс за м²» → 200000. Не путать с бюджетом (max_price)",
+    )
     min_floor: int | None = Field(default=None, description="Минимальный этаж")
     max_floor: int | None = Field(default=None, description="Максимальный этаж")
     sort_by: Literal["price_asc", "area_desc", "price_per_sqm_asc"] | None = Field(

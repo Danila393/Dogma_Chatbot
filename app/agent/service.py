@@ -200,7 +200,18 @@ class ApartmentAgent:
 def _apply_hints(arguments: dict[str, object], hints: QueryHints) -> dict[str, object]:
     """Explicit values parsed from the text by Python win over the model's numbers."""
     merged = dict(arguments)
-    for name, value in hints.as_overrides().items():
+    overrides = hints.as_overrides()
+    per_sqm_values = {
+        v for k, v in overrides.items() if k in ("min_price_per_sqm", "max_price_per_sqm")
+    }
+    for name in ("min_price", "max_price"):
+        # The model often puts "метр не дороже 200 тысяч" into the apartment budget.
+        if name not in overrides and merged.get(name) in per_sqm_values:
+            logger.info(
+                "LLM budget dropped: the text gives a price per square metre",
+                extra={"field": name, "llm_value": merged.pop(name)},
+            )
+    for name, value in overrides.items():
         model_value = merged.get(name)
         hint_value: object = float(value) if isinstance(value, Decimal) else value
         if model_value != hint_value:

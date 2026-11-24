@@ -88,7 +88,16 @@ async def test_structured_search_ambiguous_complex(client: httpx.AsyncClient) ->
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "filter_value_not_resolved"
+    assert error["details"]["reason"] == "ambiguous"
     assert error["details"]["candidates"] == ["DОГМА ПАРК", "Парк Победы", "Парк Победы 3"]
+
+
+async def test_structured_search_unknown_complex(client: httpx.AsyncClient) -> None:
+    response = await client.post("/api/v1/apartments/search", json={"complex_name": "Луна"})
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["details"]["reason"] == "not_found"
+    assert error["message"].startswith("ЖК «Луна» в базе нет.")
 
 
 async def test_complexes(client: httpx.AsyncClient) -> None:
