@@ -56,3 +56,16 @@ def rooms_label(rooms: int) -> str:
     if rooms == 0:
         return "студия"
     return f"{rooms}-комнатная"
+
+
+def plural(count: int, one: str, few: str, many: str) -> str:
+    """Russian plural form: plural(5, 'квартира', 'квартиры', 'квартир') -> 'квартир'."""
+    tail = abs(count) % 100
+    if 11 <= tail <= 14:
+        return many
+    last = tail % 10
+    if last == 1:
+        return one
+    if 2 <= last <= 4:
+        return few
+    return many
