@@ -8,6 +8,8 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.apartment import DataFreshness, RankedApartment
+
 MAX_PRICE_RUB = 10_000_000_000
 MAX_AREA_M2 = Decimal(1000)
 MAX_LIMIT = 10
@@ -115,3 +117,12 @@ class ApartmentSearchFilters(BaseModel):
                 self.max_floor,
             )
         )
+
+
+class SearchResponse(BaseModel):
+    filters: ApartmentSearchFilters = Field(description="Применённые фильтры")
+    total_found: int = Field(description="Сколько всего квартир подходит")
+    items: list[RankedApartment]
+    message: str
+    notes: list[str] = Field(default_factory=list, description="Как были интерпретированы значения")
+    data_freshness: DataFreshness

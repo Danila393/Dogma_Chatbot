@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 
 import pytest
@@ -34,3 +35,9 @@ async def session(
 ) -> AsyncIterator[AsyncSession]:
     async with session_factory() as session:
         yield session
+
+
+@pytest.fixture(autouse=True)
+def _verbose_logging() -> None:
+    """Exercise every log call (e.g. reserved `extra` keys raise only when records are built)."""
+    logging.getLogger().setLevel(logging.DEBUG)

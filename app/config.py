@@ -49,7 +49,11 @@ class Settings(BaseSettings):
     # Search
     default_search_limit: int = Field(default=5, ge=1, le=10)
     max_search_limit: int = Field(default=10, ge=1, le=50)
-    chat_max_message_length: int = Field(default=1000, ge=10, le=10000)
+
+    # Telegram bot (optional thin client of the REST API)
+    telegram_bot_token: SecretStr = SecretStr("")
+    bot_api_base_url: str = "http://localhost:8000"
+    bot_request_timeout: float = Field(default=90.0, gt=0)
 
     @field_validator("parser_city_ids", mode="before")
     @classmethod

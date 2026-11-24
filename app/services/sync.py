@@ -84,11 +84,11 @@ class SyncService:
             extra={
                 "run_id": run_id,
                 "status": status.value,
-                "fetched": report.fetched,
-                "created": report.created,
-                "updated": report.updated,
-                "unchanged": report.unchanged,
-                "marked_unavailable": report.marked_unavailable,
+                "fetched_count": report.fetched,
+                "created_count": report.created,
+                "updated_count": report.updated,
+                "unchanged_count": report.unchanged,
+                "marked_unavailable_count": report.marked_unavailable,
             },
         )
         return report
