@@ -154,7 +154,7 @@ async def test_retry_after_header_is_respected() -> None:
         await DogmaApiClient(settings, http_client=http, sleep=record_sleep).fetch_objects(
             3, limit=1, offset=0
         )
-    assert delays == [7.0]
+    assert delays == [pytest.approx(7.0, abs=0.5)]
 
 
 async def test_client_error_is_not_retried() -> None:
@@ -236,3 +236,61 @@ async def test_rate_limiter_spaces_requests() -> None:
     for _ in range(3):
         await limiter.wait()
     assert sleeps == [0.5, 0.5]
+
+
+async def test_rate_limit_pauses_all_tasks_and_slows_down() -> None:
+    now = 0.0
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        nonlocal now
+        sleeps.append(delay)
+        now += delay
+
+    limiter = RateLimiter(0.3, max_interval=2.0, clock=lambda: now, sleep=fake_sleep)
+    await limiter.wait()
+    await limiter.throttle(10.0)
+    await limiter.wait()  # any task, not only the one that got 429, waits for the cooldown
+    assert sleeps == [10.0]
+    assert limiter.interval == 0.6
+    for _ in range(5):
+        await limiter.throttle(0)
+    assert limiter.interval == 2.0  # capped
+
+
+async def test_429_uses_growing_cooldown_until_success() -> None:
+    delays: list[float] = []
+
+    async def record_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    responses = [httpx.Response(429), httpx.Response(429), httpx.Response(200, json={})]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return responses.pop(0)
+
+    settings = make_settings(parser_rate_limit_backoff=5, parser_max_retries=3)
+    http = httpx.AsyncClient(
+        base_url=settings.parser_base_url, transport=httpx.MockTransport(handler)
+    )
+    with pytest.raises(SourceFormatError):  # {} is not a valid page, but it was fetched
+        await DogmaApiClient(settings, http_client=http, sleep=record_sleep).fetch_objects(
+            3, limit=1, offset=0
+        )
+    assert [round(d) for d in delays] == [5, 10]
+
+
+async def test_rate_limiter_recovers_after_successes() -> None:
+    async def no_sleep(_: float) -> None:
+        return None
+
+    limiter = RateLimiter(0.3, max_interval=4.0, recovery_after=3, sleep=no_sleep)
+    for _ in range(4):
+        await limiter.throttle(0)
+    assert limiter.interval == 4.0
+    for _ in range(3):
+        limiter.record_success()
+    assert limiter.interval == 2.0
+    for _ in range(30):
+        limiter.record_success()
+    assert limiter.interval == 0.3  # never faster than the configured base

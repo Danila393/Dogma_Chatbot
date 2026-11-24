@@ -37,7 +37,8 @@ class Settings(BaseSettings):
     parser_site_url: str = "https://dogma.ru"
     parser_timeout: float = Field(default=30.0, gt=0)
     parser_concurrency: int = Field(default=3, ge=1, le=10)
-    parser_max_retries: int = Field(default=3, ge=0, le=10)
+    parser_max_retries: int = Field(default=5, ge=0, le=10)
+    parser_rate_limit_backoff: float = Field(default=5.0, ge=0)
     parser_backoff_base: float = Field(default=0.5, ge=0)
     parser_request_delay: float = Field(default=0.3, ge=0)
     parser_page_size: int = Field(default=100, ge=1, le=500)

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+from decimal import Decimal
 
 from pydantic import ValidationError
 
+from app.agent.hints import QueryHints, extract_hints
 from app.agent.prompts import build_system_prompt
 from app.agent.provider import LLMProvider, LLMReply, LLMToolCall, Message
 from app.agent.tools import (
@@ -45,6 +47,12 @@ class ApartmentAgent:
         self._search = search
 
     async def handle(self, message: str) -> ChatResponse:
+        hints = extract_hints(message)
+        if hints.contradiction is not None:
+            # An explicit inverted range needs no model: explain it right away.
+            return await self._empty_response(
+                message, ChatStatus.CONTRADICTION, hints.contradiction
+            )
         complexes = await self._search.complex_names()
         cities = await self._search.city_names()
         messages: list[Message] = [
@@ -56,7 +64,7 @@ class ApartmentAgent:
             reply = await self._provider.complete(messages, TOOLS)
             call = reply.tool_calls[0] if reply.tool_calls else None
             try:
-                return await self._dispatch(message, call)
+                return await self._dispatch(message, call, hints)
             except _InvalidToolCallError as exc:
                 logger.warning(
                     "invalid tool call from LLM",
@@ -69,7 +77,9 @@ class ApartmentAgent:
                 messages.extend(self._repair_messages(reply, call, str(exc)))
         raise LLMInvalidResponseError()
 
-    async def _dispatch(self, message: str, call: LLMToolCall | None) -> ChatResponse:
+    async def _dispatch(
+        self, message: str, call: LLMToolCall | None, hints: QueryHints
+    ) -> ChatResponse:
         if call is None:
             raise _InvalidToolCallError(
                 f"Нужно вызвать инструмент {SEARCH_TOOL} или {REPLY_TOOL}, а не отвечать текстом."
@@ -83,7 +93,7 @@ class ApartmentAgent:
             return await self._reply_without_search(message, reply_args)
         if call.name == SEARCH_TOOL:
             try:
-                filters = self._build_filters(arguments)
+                filters = self._build_filters(_apply_hints(arguments, hints))
             except _ContradictionError as exc:
                 return await self._empty_response(message, ChatStatus.CONTRADICTION, str(exc))
             return await self._run_search(message, filters)
@@ -185,6 +195,21 @@ class ApartmentAgent:
                 "content": f"Ошибка валидации аргументов: {problem} Исправь и вызови снова.",
             },
         ]
+
+
+def _apply_hints(arguments: dict[str, object], hints: QueryHints) -> dict[str, object]:
+    """Explicit values parsed from the text by Python win over the model's numbers."""
+    merged = dict(arguments)
+    for name, value in hints.as_overrides().items():
+        model_value = merged.get(name)
+        hint_value: object = float(value) if isinstance(value, Decimal) else value
+        if model_value != hint_value:
+            logger.info(
+                "LLM value replaced by explicit value from the text",
+                extra={"field": name, "llm_value": model_value, "text_value": hint_value},
+            )
+        merged[name] = hint_value
+    return merged
 
 
 def _find_range_error(exc: ValidationError) -> RangeError | None:

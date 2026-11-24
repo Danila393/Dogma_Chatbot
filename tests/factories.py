@@ -29,6 +29,7 @@ def make_settings(**overrides: Any) -> Settings:
         "parser_site_url": "https://dogma.ru",
         "parser_request_delay": 0,
         "parser_backoff_base": 0,
+        "parser_rate_limit_backoff": 0,
         "parser_max_retries": 2,
         "parser_page_size": 2,
         "parser_concurrency": 2,

@@ -19,36 +19,65 @@ from app.parser.schemas import RawConfig, RawObjectsData, RawObjectsResponse
 logger = logging.getLogger(__name__)
 
 RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
-MAX_RETRY_AFTER_SECONDS = 30.0
+MAX_RETRY_AFTER_SECONDS = 60.0
+MAX_RATE_LIMIT_COOLDOWN_SECONDS = 60.0
 APARTMENT_TYPE = 1
 AVAILABLE_STATUSES = (2,)
 
 
 class RateLimiter:
-    """Guarantees a minimum interval between request starts across concurrent tasks."""
+    """Minimum interval between request starts, shared by all concurrent tasks.
+
+    `throttle()` reacts to HTTP 429: every task pauses for the cooldown and the interval
+    between requests doubles (up to `max_interval`). After `recovery_after` consecutive
+    successful requests the interval is halved again, back down to the configured base.
+    """
 
     def __init__(
         self,
         min_interval: float,
+        *,
+        max_interval: float = 5.0,
+        recovery_after: int = 20,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
-        self._min_interval = min_interval
+        self._base_interval = min_interval
+        self._interval = min_interval
+        self._recovery_after = recovery_after
+        self._successes = 0
+        self._max_interval = max(max_interval, min_interval)
         self._clock = clock
         self._sleep = sleep
         self._lock = asyncio.Lock()
         self._next_allowed = 0.0
 
+    @property
+    def interval(self) -> float:
+        return self._interval
+
     async def wait(self) -> None:
-        if self._min_interval <= 0:
-            return
         async with self._lock:
             now = self._clock()
             delay = self._next_allowed - now
             if delay > 0:
                 await self._sleep(delay)
                 now = self._clock()
-            self._next_allowed = now + self._min_interval
+            self._next_allowed = now + self._interval
+
+    async def throttle(self, cooldown: float) -> None:
+        async with self._lock:
+            self._successes = 0
+            self._next_allowed = max(self._next_allowed, self._clock() + cooldown)
+            self._interval = min(max(self._interval * 2, 0.5), self._max_interval)
+
+    def record_success(self) -> None:
+        if self._interval <= self._base_interval:
+            return
+        self._successes += 1
+        if self._successes >= self._recovery_after:
+            self._successes = 0
+            self._interval = max(self._base_interval, self._interval / 2)
 
 
 class DogmaApiClient:
@@ -71,7 +100,7 @@ class DogmaApiClient:
                 "Content-Type": "application/json",
             },
         )
-        self._rate_limiter = RateLimiter(settings.parser_request_delay)
+        self._rate_limiter = RateLimiter(settings.parser_request_delay, sleep=sleep)
         self._sleep = sleep
         self.requests_made = 0
 
@@ -131,6 +160,7 @@ class DogmaApiClient:
                 reason = type(exc).__name__
             else:
                 if response.status_code < 400:
+                    self._rate_limiter.record_success()
                     try:
                         return response.json()
                     except ValueError as exc:
@@ -143,7 +173,13 @@ class DogmaApiClient:
 
             if attempt == max_attempts:
                 break
-            delay = retry_after if retry_after is not None else self._backoff(attempt)
+            rate_limited = reason == "HTTP 429"
+            if retry_after is not None:
+                delay = retry_after
+            elif rate_limited:
+                delay = self._rate_limit_backoff(attempt)
+            else:
+                delay = self._backoff(attempt)
             logger.warning(
                 "source request failed, retrying",
                 extra={
@@ -154,11 +190,19 @@ class DogmaApiClient:
                     "elapsed_s": round(time.monotonic() - started, 2),
                 },
             )
-            await self._sleep(delay)
+            if rate_limited:
+                # Pause every concurrent task and slow the whole run down, not just this one.
+                await self._rate_limiter.throttle(delay)
+            else:
+                await self._sleep(delay)
 
         raise SourceError(
             f"{path}: giving up after {max_attempts} attempts (last error: {last_error})"
         ) from last_error
+
+    def _rate_limit_backoff(self, attempt: int) -> float:
+        base: float = self._settings.parser_rate_limit_backoff * (2 ** (attempt - 1))
+        return min(base, MAX_RATE_LIMIT_COOLDOWN_SECONDS)
 
     def _backoff(self, attempt: int) -> float:
         base: float = self._settings.parser_backoff_base * (2 ** (attempt - 1))

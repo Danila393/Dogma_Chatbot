@@ -114,13 +114,46 @@ async def test_invalid_json_is_repaired_once(search: SearchService) -> None:
     assert provider.requests[1][-2]["tool_calls"][0]["id"] == "call_1"
 
 
-async def test_price_in_millions_is_sent_back_for_correction(search: SearchService) -> None:
+async def test_implausible_price_without_explicit_text_is_sent_back(search: SearchService) -> None:
     provider = ScriptedProvider(
         search_call({"max_price": 7}), search_call({"max_price": 7_000_000})
     )
-    response = await ApartmentAgent(provider, search).handle("до 7 лямов")
+    response = await ApartmentAgent(provider, search).handle("что-нибудь подешевле")
     assert response.filters is not None and response.filters.max_price == 7_000_000
     assert "в рублях" in provider.requests[1][-1]["content"]
+
+
+@pytest.mark.parametrize(
+    ("message", "llm_arguments", "expected"),
+    [
+        # real mistakes made by qwen2.5:7b during the live check
+        (
+            "Найди студию в ЖК Самолёт до 7 млн, от 30 квадратов",
+            {"complex_name": "Самолёт", "max_price": 7_000_000, "min_area": 30, "rooms": 1},
+            {"rooms": 0, "max_price": 7_000_000},
+        ),
+        (
+            "Однушка в Рекорд 2 не дороже 9 лямов, покажи 3 варианта",
+            {"complex_name": "Рекорд 2", "max_price": 90_000_000, "rooms": 1, "limit": 3},
+            {"rooms": 1, "max_price": 9_000_000},
+        ),
+        ("до 7 лямов", {"max_price": 7}, {"max_price": 7_000_000}),
+        ("двушка", {}, {"rooms": 2}),  # the model forgot a stated constraint
+    ],
+)
+async def test_explicit_values_from_text_override_the_model(
+    search: SearchService,
+    message: str,
+    llm_arguments: dict[str, Any],
+    expected: dict[str, int],
+) -> None:
+    provider = ScriptedProvider(search_call(llm_arguments))
+    response = await ApartmentAgent(provider, search).handle(message)
+    assert response.filters is not None
+    for name, value in expected.items():
+        assert getattr(response.filters, name) == value
+    assert all(i.rooms == expected.get("rooms", i.rooms) for i in response.items)
+    assert len(provider.requests) == 1
 
 
 async def test_text_without_tool_call_is_repaired(search: SearchService) -> None:
@@ -144,12 +177,19 @@ async def test_unknown_tool_is_rejected(search: SearchService) -> None:
     assert response.status is ChatStatus.OFF_TOPIC
 
 
-async def test_contradiction_in_ranges(search: SearchService) -> None:
-    provider = ScriptedProvider(search_call({"min_price": 8_000_000, "max_price": 5_000_000}))
-    response = await ApartmentAgent(provider, search).handle("от 8 до 5 миллионов")
+async def test_explicit_inverted_range_is_answered_without_llm(search: SearchService) -> None:
+    provider = ScriptedProvider()
+    response = await ApartmentAgent(provider, search).handle("Трёшка от 10 до 5 млн")
     assert response.status is ChatStatus.CONTRADICTION
     assert "противоречат" in response.message
     assert response.items == []
+    assert provider.requests == []
+
+
+async def test_inverted_range_from_model_is_a_contradiction(search: SearchService) -> None:
+    provider = ScriptedProvider(search_call({"min_price": 8_000_000, "max_price": 5_000_000}))
+    response = await ApartmentAgent(provider, search).handle("бюджет примерно как обсуждали")
+    assert response.status is ChatStatus.CONTRADICTION
     assert len(provider.requests) == 1
 
 

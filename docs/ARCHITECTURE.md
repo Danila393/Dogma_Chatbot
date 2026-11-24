@@ -23,7 +23,7 @@
 | Sync | `app/services/sync.py` | Оркестрация: парсер → репозиторий, решение о снятии лотов | Не ходит в сеть напрямую |
 | Repository | `app/db/*` | SQLAlchemy-модели, UPSERT, параметризованный поиск | Не валидирует пользовательский ввод |
 | Search Service | `app/services/search.py`, `complexes.py`, `explanation.py` | Разрешение ЖК, фильтры, ранжирование, объяснения | Не зависит от LLM |
-| AI Agent | `app/agent/*` | Интерпретация текста через Tool Calling, валидация аргументов | Не обращается к БД, не формирует SQL, не пишет текст о квартирах |
+| AI Agent | `app/agent/*` | Интерпретация текста через Tool Calling, сверка явных чисел из текста (`hints.py`), валидация аргументов | Не обращается к БД, не формирует SQL, не пишет текст о квартирах |
 | API | `app/api/*`, `app/main.py`, `app/dependencies.py` | HTTP-контракт, DI, единый формат ошибок | Не содержит бизнес-логики |
 | Telegram bot | `app/bot/*` | Приём сообщений и форматирование ответа API | Не обращается к БД и LLM |
 
@@ -42,7 +42,7 @@ app/
 ├── db/                # models.py, session.py, repository.py, types.py
 ├── schemas/           # apartment.py, search.py, chat.py
 ├── services/          # search.py, complexes.py, explanation.py, sync.py, text.py
-├── agent/             # service.py, provider.py, prompts.py, tools.py
+├── agent/             # service.py, provider.py, prompts.py, tools.py, hints.py
 └── bot/               # main.py, api_client.py, formatting.py
 tests/
 ├── fixtures/          # ответы API в формате источника
@@ -200,8 +200,13 @@ sequenceDiagram
     U->>API: POST /api/v1/chat {message}
     API->>A: handle(message)
     A->>S: list_complexes() (названия ЖК для промпта)
+    A->>A: hints = extract_hints(message) (Python: комнаты, цены, площади)
+    alt явный перевёрнутый диапазон («от 10 до 5 млн»)
+        A-->>API: status=contradiction (без LLM)
+    end
     A->>L: system prompt + message + tools
     L-->>A: tool_call search_apartments(args) | reply_without_search
+    A->>A: явные значения из текста заменяют аргументы модели (ADR-017)
     A->>A: Pydantic-валидация (1 повтор с текстом ошибки при невалидном JSON)
     alt противоречие (min > max)
         A-->>API: status=contradiction
@@ -218,8 +223,9 @@ sequenceDiagram
     API-->>U: top-N квартир + объяснения + актуальность
 ```
 
-LLM участвует только в одном шаге — превращении текста в аргументы инструмента. Все
-числа, ссылки и тексты о квартирах формирует backend из данных БД.
+LLM участвует только в одном шаге — превращении текста в аргументы инструмента. Числа,
+явно названные в тексте, Python сверяет и при расхождении исправляет сам. Все цены, ссылки и
+тексты о квартирах формирует backend из данных БД.
 
 ## 8. Жизненный цикл синхронизации данных
 
@@ -257,7 +263,8 @@ LLM участвует только в одном шаге — превраще�
 
 | Ситуация | Поведение |
 |---|---|
-| Таймаут/сеть/5xx/429 источника | до `PARSER_MAX_RETRIES` повторов с backoff `0.5·2^n` + jitter, `Retry-After` учитывается |
+| Таймаут/сеть/5xx источника | до `PARSER_MAX_RETRIES` повторов с backoff `0.5·2^n` + jitter |
+| 429 от источника | пауза для **всех** воркеров (`Retry-After` или 5→10→20→40→60 с), интервал между запросами удваивается до 5 с до конца запуска |
 | 4xx источника, невалидный JSON/формат | страница помечается ошибкой без повторов, сбор города неполный |
 | Невалидный объект | пропуск + warning с `external_id` и причиной |
 | LLM не настроен | `503 llm_not_configured` |
