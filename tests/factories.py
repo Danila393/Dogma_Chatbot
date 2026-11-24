@@ -143,3 +143,27 @@ def apartment_data(external_id: str, **overrides: Any) -> ApartmentData:
     }
     values.update(overrides)
     return ApartmentData(**values)
+
+
+CATALOG = [
+    # external id, complex, rooms, price, area, floor
+    ("1", "МКР Самолёт", 0, 5_365_500, "26.20", 5),
+    ("2", "МКР Самолёт", 0, 6_450_000, "30.00", 7),
+    ("3", "МКР Самолёт", 0, 6_450_000, "31.50", 2),
+    ("4", "МКР Самолёт", 0, 7_000_000, "33.00", 9),
+    ("5", "МКР Самолёт", 0, 7_000_001, "40.00", 3),
+    ("6", "МКР Самолёт", 2, 11_721_675, "67.20", 4),
+    ("7", "САМОЛЁТ 7", 0, 5_900_000, "30.10", 6),
+    ("8", "Рекорд 2", 0, 7_175_445, "32.30", 3),
+    ("9", "Рекорд 2", 1, 8_299_414, "44.98", 12),
+    ("10", "DОГМА ПАРК", 3, 13_274_461, "76.91", 10),
+    ("11", "Парк Победы", 2, 10_794_565, "67.30", 8),
+    ("12", "Парк Победы 3", 1, 6_900_000, "38.00", 4),
+]
+
+
+def catalog_apartments() -> list[ApartmentData]:
+    return [
+        apartment_data(ext, complex_name=name, rooms=rooms, price=price, area=area, floor=floor)
+        for ext, name, rooms, price, area, floor in CATALOG
+    ]

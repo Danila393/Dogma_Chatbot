@@ -123,6 +123,9 @@ class SearchService:
     async def complex_names(self) -> list[str]:
         return [c.name for c in await self._apartments.list_complexes()]
 
+    async def city_names(self) -> list[str]:
+        return await self._apartments.list_cities()
+
     async def freshness(self) -> DataFreshness:
         run = await self._sync_runs.last_with_data()
         counts = await self._apartments.count_by_status()

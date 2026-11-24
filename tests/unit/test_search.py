@@ -11,25 +11,9 @@ from app.exceptions import FilterValueNotResolvedError
 from app.schemas.search import ApartmentSearchFilters, SortBy
 from app.services.complexes import resolve_complex
 from app.services.search import SearchService
-from tests.factories import apartment_data
+from tests.factories import CATALOG, apartment_data, catalog_apartments
 
 T0 = datetime(2026, 11, 1, tzinfo=UTC)
-
-CATALOG = [
-    # id, complex, rooms, price, area, floor
-    ("1", "МКР Самолёт", 0, 5_365_500, "26.20", 5),
-    ("2", "МКР Самолёт", 0, 6_450_000, "30.00", 7),
-    ("3", "МКР Самолёт", 0, 6_450_000, "31.50", 2),
-    ("4", "МКР Самолёт", 0, 7_000_000, "33.00", 9),
-    ("5", "МКР Самолёт", 0, 7_000_001, "40.00", 3),
-    ("6", "МКР Самолёт", 2, 11_721_675, "67.20", 4),
-    ("7", "САМОЛЁТ 7", 0, 5_900_000, "30.10", 6),
-    ("8", "Рекорд 2", 0, 7_175_445, "32.30", 3),
-    ("9", "Рекорд 2", 1, 8_299_414, "44.98", 12),
-    ("10", "DОГМА ПАРК", 3, 13_274_461, "76.91", 10),
-    ("11", "Парк Победы", 2, 10_794_565, "67.30", 8),
-    ("12", "Парк Победы 3", 1, 6_900_000, "38.00", 4),
-]
 
 
 @pytest.fixture
@@ -37,10 +21,9 @@ async def service(session: AsyncSession) -> SearchService:
     repo = ApartmentRepository(session)
     await repo.upsert_many(
         [
-            apartment_data(ext, complex_name=name, rooms=rooms, price=price, area=area, floor=floor)
-            for ext, name, rooms, price, area, floor in CATALOG
-        ]
-        + [apartment_data("99", complex_name="Снегири", city_id=6, city="Омск", rooms=0)],
+            *catalog_apartments(),
+            apartment_data("99", complex_name="Снегири", city_id=6, city="Омск", rooms=0),
+        ],
         seen_at=T0,
     )
     await repo.upsert_many(
