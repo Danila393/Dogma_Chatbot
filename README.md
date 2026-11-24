@@ -63,13 +63,18 @@ flowchart LR
 
 ## Быстрый старт (Docker)
 
-Требуется Docker с Compose v2.24+.
+Требуется Docker с Compose v2.24+. Для AI-чата нужна LLM: проще всего локальная
+[Ollama](https://ollama.com) (бесплатно, без регистрации) — `ollama pull qwen2.5:7b`.
 
 ```bash
-cp .env.example .env          # для AI-чата заполните LLM_* (см. ниже); без них работает остальное
-docker compose up --build -d  # API на http://localhost:8000, Swagger: http://localhost:8000/docs
-docker compose run --rm api python -m app.cli sync   # сбор реальных данных (~1–2 минуты)
+cp .env.example .env    # для Ollama: LLM_BASE_URL=http://host.docker.internal:11434/v1
+                        #             LLM_MODEL=qwen2.5:7b
+docker compose up --build -d                          # API: http://localhost:8000
+docker compose run --rm api python -m app.cli sync    # сбор реальных данных (~1,5 минуты)
 ```
+
+Без настроенной LLM работают сбор данных, структурированный поиск и справочник ЖК; чат
+отвечает `503 llm_not_configured`.
 
 Быстрый демо-сбор (по 2 страницы на город):
 
@@ -84,11 +89,63 @@ docker compose run --rm api python -m app.cli sync --max-pages 2
 контейнеров (`docker compose down && docker compose up -d`). Удалить данные:
 `docker compose down -v`.
 
-Telegram-бот (нужен `TELEGRAM_BOT_TOKEN` в `.env`):
+## Как пользоваться
 
-```bash
-docker compose --profile bot up -d
+### Через API (Swagger UI)
+
+1. Откройте http://localhost:8000/docs.
+2. Выберите `POST /api/v1/chat` → **Try it out**, вставьте запрос и нажмите **Execute**:
+
+   ```json
+   {"message": "Найди студию в ЖК Самолёт до 7 млн, от 30 квадратов"}
+   ```
+
+3. Для поиска без LLM — `POST /api/v1/apartments/search` с фильтрами:
+
+   ```json
+   {"max_price": 7000000, "min_area": 30, "complex_name": "Самолёт", "rooms": 0, "limit": 5}
+   ```
+
+4. `GET /api/v1/complexes` — какие ЖК есть в базе; `GET /ready` — состояние сервиса и
+   количество квартир.
+
+Те же запросы из PowerShell (Windows):
+
+```powershell
+$body = @{ message = "Двушка в Краснодаре от 5 до 9 миллионов" } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/api/v1/chat -Method Post `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([Text.Encoding]::UTF8.GetBytes($body)) | ConvertTo-Json -Depth 5
 ```
+
+Примеры для `curl` — в разделе [«Примеры API-запросов»](#примеры-api-запросов).
+
+### Через Telegram-бота
+
+Бот — тонкий клиент к `POST /api/v1/chat`: ответы те же, что в API.
+
+1. Создайте бота: в Telegram напишите [@BotFather](https://t.me/BotFather) → `/newbot` →
+   имя → username, оканчивающийся на `bot`. BotFather пришлёт токен.
+2. Впишите токен в `.env`:
+
+   ```env
+   TELEGRAM_BOT_TOKEN=1234567890:AA...
+   ```
+
+3. Запустите API вместе с ботом и проверьте лог (должно быть `telegram bot started`):
+
+   ```bash
+   docker compose --profile bot up --build -d
+   docker compose logs -f bot
+   ```
+
+4. Откройте бота в Telegram, нажмите **Запустить** (`/start`) и пишите обычным текстом:
+   «Найди студию в ЖК Самолёт до 7 млн, от 30 квадратов», «Самая просторная трёшка в
+   Рекорд 2», «Хочу квартиру в ЖК Парк». Бот вернёт топ квартир с ценой, объяснением и
+   ссылкой на лот.
+
+Остановить бота: `docker compose --profile bot stop bot`. Если контейнер не может
+подключиться к `api.telegram.org`, проверьте доступ к Telegram из сети, где запущен Docker.
 
 ## Локальный запуск без Docker
 
