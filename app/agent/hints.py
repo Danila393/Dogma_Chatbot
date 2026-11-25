@@ -44,7 +44,11 @@ for _value, _forms in {
 _WORDS_RE = "|".join(sorted((re.escape(w) for w in _WORD_NUMBERS), key=len, reverse=True))
 _NUM = rf"(?:\d{{1,3}}(?:[  ]\d{{3}})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?|(?:{_WORDS_RE})\b)"
 _MONEY_MILLION = r"(?:млн\.?|миллион\w*|лям\w*|kk|кк)"
-_MONEY_THOUSAND = r"(?:тыс\.?|тысяч\w*|косар\w*)"
+_MONEY_THOUSAND = r"(?:тыс\.?|тысяч\w*|косар\w*|[кk](?![а-яёa-z]))"
+_SHORT_THOUSAND = r"[кk]"
+# "200к" means thousands, but "3к" is how people write a 3-room flat: below this value
+# the short form is not trusted as money.
+MIN_SHORT_THOUSAND_VALUE = 10
 _MONEY_RUB = r"(?:₽|руб\.?|рубл\w*|р\.)"
 _AREA = r"(?:м2|м²|кв\.?\s*м\.?|квадрат\w*|метр\w*|кв\.?)"
 _UNIT = rf"(?:{_MONEY_MILLION}|{_MONEY_THOUSAND}|{_MONEY_RUB}|{_AREA})"
@@ -142,6 +146,8 @@ def _kind(unit: str | None) -> str | None:
 
 
 def _money(value: Decimal, unit: str | None) -> int | None:
+    if unit and re.fullmatch(_SHORT_THOUSAND, unit) and value < MIN_SHORT_THOUSAND_VALUE:
+        return None
     if unit and re.fullmatch(_MONEY_MILLION, unit):
         value *= 1_000_000
     elif unit and re.fullmatch(_MONEY_THOUSAND, unit):
@@ -166,6 +172,8 @@ def _is_per_sqm(text: str, start: int, end: int) -> bool:
 
 
 def _money_per_sqm(value: Decimal, unit: str | None) -> int | None:
+    if unit and re.fullmatch(_SHORT_THOUSAND, unit) and value < MIN_SHORT_THOUSAND_VALUE:
+        return None
     if unit and re.fullmatch(_MONEY_MILLION, unit):
         value *= 1_000_000
     elif unit and re.fullmatch(_MONEY_THOUSAND, unit):
